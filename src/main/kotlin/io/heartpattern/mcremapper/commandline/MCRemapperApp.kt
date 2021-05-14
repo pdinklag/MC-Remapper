@@ -6,7 +6,6 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.choice
-import com.github.ajalt.clikt.parameters.types.file
 import com.github.ajalt.clikt.parameters.types.int
 import io.heartpattern.mcremapper.MCRemapper
 import io.heartpattern.mcremapper.download
@@ -14,6 +13,7 @@ import io.heartpattern.mcremapper.model.LocalVariableFixType
 import io.heartpattern.mcremapper.parser.MappingParser
 import io.heartpattern.mcremapper.parser.csrg.MappingCsrgParser
 import io.heartpattern.mcremapper.parser.proguard.MappingProguardParser
+import io.heartpattern.mcremapper.parser.srg.MappingSrgParser
 import io.heartpattern.mcremapper.preprocess.AutoLoggerPreprocessor
 import io.heartpattern.mcremapper.preprocess.AutoTokenPreprocessor
 import io.heartpattern.mcremapper.preprocess.InheritabilityPreprocessor
@@ -42,7 +42,7 @@ class MCRemapperApp : CliktCommand() {
     private val arg1: String by argument()
 
     // Options
-    private val output: File by option().file(mustExist = false).default(File("deobfuscated.jar"))
+    private val outputName: String? by option()
     private val reobf: Boolean by option().flag()
     private val thread: Int by option().int().default(8)
     private val fixlocalvar: LocalVariableFixType by option().choice("no", "rename", "delete").convert {
@@ -56,10 +56,11 @@ class MCRemapperApp : CliktCommand() {
     private val autologger: Boolean by option().flag()
     private val autotoken: Boolean by option().flag()
     private val mappackage: Map<String, String> by option().associate()
-    private val mappingParser: MappingParser by option("--format").choice("proguard", "csrg").convert {
+    private val mappingParser: MappingParser by option("--format").choice("proguard", "csrg", "srg").convert {
         when (it) {
             "proguard" -> MappingProguardParser
             "csrg" -> MappingCsrgParser
+            "srg" -> MappingSrgParser
             else -> error("")
         }
     }.default(MappingProguardParser)
@@ -93,6 +94,14 @@ class MCRemapperApp : CliktCommand() {
             arg1.startsWith("http") -> URL(arg1).readText()
             else -> File(arg1).readText()
         }
+
+        val output = File(when {
+            outputName != null -> outputName!!
+            arg0 == "server" -> "server_${versionInfo.id}.jar"
+            arg0 == "client" -> "client_${versionInfo.id}.jar"
+            arg0.startsWith("http") -> "${URL(arg0).host}-deobfuscated.jar"
+            else -> "${arg1}-deobfuscated.jar"
+        })
 
         println("Parse mapping")
         val originalMapping = mappingParser.parse(rawMapping)
